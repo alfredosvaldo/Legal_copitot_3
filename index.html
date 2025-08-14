@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Herramienta de Generación de Indicaciones Legales con IA</title>
+    <title>Copiloto Legal: Comparador Legislativo Inteligente</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Library for Word export -->
     <script src="https://unpkg.com/html-docx-js/dist/html-docx.js"></script>
     <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <!-- Library for Diff viewer -->
+    <script src="https://cdn.jsdelivr.net/npm/diff@5.1.0/dist/diff.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -35,14 +37,23 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Styles for Diff Viewer */
+        ins {
+            background-color: #d4edda; /* Light green */
+            text-decoration: none;
+        }
+        del {
+            background-color: #f8d7da; /* Light red */
+            text-decoration: line-through;
+        }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="bg-gray-100 text-gray-800 flex flex-col min-h-screen">
 
-    <div class="container mx-auto p-4 md:p-8">
+    <div class="container mx-auto p-4 md:p-8 flex-grow">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Herramienta de Generación de Indicaciones Legales con IA</h1>
-            <p class="text-gray-600 mt-2">Pegue los documentos, genere una tabla comparativa y expórtela a Word.</p>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Copiloto Legal</h1>
+            <p class="text-gray-600 mt-2">Su asistente para la generación de indicaciones y tablas comparativas de textos legales.</p>
         </header>
 
         <div class="bg-white p-6 rounded-lg shadow-md mb-6">
@@ -81,12 +92,15 @@
         </div>
     </div>
 
+    <footer class="text-center p-4 text-gray-500 text-sm">
+        <p>Copiloto Legal v3.0 | Última actualización: 14 de Agosto, 2025</p>
+    </footer>
+
     <script>
         document.getElementById('generateButton').addEventListener('click', generateIndications);
         document.getElementById('exportButton').addEventListener('click', exportToWord);
 
         function cleanTextForJson(text) {
-            // Remove markdown backticks and the 'json' prefix
             let cleaned = text.trim();
             if (cleaned.startsWith('```json')) {
                 cleaned = cleaned.substring(7);
@@ -101,10 +115,10 @@
         
         function renderTable(articles) {
             const container = document.getElementById('resultsContainer');
-            container.innerHTML = ''; // Clear previous results
+            container.innerHTML = ''; 
 
             if (!articles || articles.length === 0) {
-                container.textContent = 'No se encontraron diferencias o no se pudo procesar el texto.';
+                container.textContent = 'No se encontraron artículos o no se pudo procesar el texto.';
                 return;
             }
 
@@ -115,20 +129,36 @@
             const thead = document.createElement('thead');
             thead.innerHTML = `
                 <tr>
-                    <th class="w-1/3 p-2 border bg-gray-100">Texto Original</th>
+                    <th class="w-1/3 p-2 border bg-gray-100">Texto Original (con cambios)</th>
                     <th class="w-1/3 p-2 border bg-gray-100">Indicaciones Generadas</th>
-                    <th class="w-1/3 p-2 border bg-gray-100">Texto Final</th>
+                    <th class="w-1/3 p-2 border bg-gray-100">Texto Final (con cambios)</th>
                 </tr>
             `;
             table.appendChild(thead);
 
             const tbody = document.createElement('tbody');
             articles.forEach(article => {
+                const diff = Diff.diffWords(article.textoOriginal, article.textoFinal, { ignoreWhitespace: true });
+                let originalHtml = '';
+                let finalHtml = '';
+
+                diff.forEach(part => {
+                    const value = part.value.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    if (part.added) {
+                        finalHtml += `<ins>${value}</ins>`;
+                    } else if (part.removed) {
+                        originalHtml += `<del>${value}</del>`;
+                    } else {
+                        originalHtml += value;
+                        finalHtml += value;
+                    }
+                });
+
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td class="p-2 border align-top whitespace-pre-wrap">${article.textoOriginal}</td>
+                    <td class="p-2 border align-top whitespace-pre-wrap">${originalHtml}</td>
                     <td class="p-2 border align-top whitespace-pre-wrap">${article.indicaciones}</td>
-                    <td class="p-2 border align-top whitespace-pre-wrap">${article.textoFinal}</td>
+                    <td class="p-2 border align-top whitespace-pre-wrap">${finalHtml}</td>
                 `;
                 tbody.appendChild(row);
             });
@@ -161,9 +191,9 @@
             generateButton.textContent = 'Generando...';
             outputSection.classList.remove('hidden');
             resultsContainer.innerHTML = '<div class="loader"></div>';
-            timerResult.textContent = ''; // Clear previous timer
+            timerResult.textContent = ''; 
 
-            const startTime = performance.now(); // Start timer
+            const startTime = performance.now(); 
 
             try {
                 const prompt = `
@@ -171,14 +201,14 @@
 
                     **Instrucciones Fundamentales:**
                     1.  **Análisis por Artículo:** Procesa el documento completo, usando "Artículo [N°]" como el delimitador para cada bloque de texto.
-                    2.  **Comparación y Estructuración:** Compara cada artículo del 'Texto Original' con su correspondiente artículo en el 'Texto Final'.
-                    3.  **Generar Indicaciones:** Para CADA artículo que presente diferencias, genera un texto de indicaciones formales, precisas y numeradas (1), 2), etc.) usando el glosario legislativo chileno.
+                    2.  **Comparación y Estructuración:** Compara CADA artículo del 'Texto Original' con su correspondiente artículo en el 'Texto Final'.
+                    3.  **Generar Indicaciones:** Para los artículos que presenten diferencias, genera un texto de indicaciones formales, precisas y numeradas (1), 2), etc.) usando el glosario legislativo chileno.
                     4.  **Formato de Salida JSON OBLIGATORIO:** Tu respuesta DEBE ser un único objeto JSON. Este objeto debe contener una clave "articulos" cuyo valor es un array de objetos.
                     5.  **Estructura del Objeto de Artículo:** Cada objeto en el array "articulos" DEBE tener exactamente tres claves:
                         - \`textoOriginal\`: El texto completo del artículo original.
-                        - \`indicaciones\`: El texto de las indicaciones generadas para ese artículo, comenzando con "AL ARTÍCULO [N°]".
+                        - \`indicaciones\`: El texto de las indicaciones generadas para ese artículo (comenzando con "AL ARTÍCULO [N°]"). Si no hay cambios, este valor DEBE ser una cadena de texto vacía ("").
                         - \`textoFinal\`: El texto completo del artículo final.
-                    6.  **Manejo de Sin Cambios:** Si un artículo no tiene cambios, NO lo incluyas en el array "articulos".
+                    6.  **Manejo de Sin Cambios:** DEBES incluir TODOS los artículos en el array "articulos", incluso si no tienen cambios. Para los artículos sin cambios, simplemente deja la clave "indicaciones" como una cadena vacía.
 
                     **Ejemplo de Salida JSON Esperada:**
                     \`\`\`json
@@ -190,9 +220,9 @@
                           "textoFinal": "Artículo 2°.- ... (i) ...consumo mensual menor o igual a 350 kWh..."
                         },
                         {
-                          "textoOriginal": "Artículo 3°.- ...componente de energía...",
-                          "indicaciones": "AL ARTÍCULO 3°\\n1) Para agregar, en el inciso segundo, a continuación de la palabra \\"energía\\", la frase \\"y potencia\\".",
-                          "textoFinal": "Artículo 3°.- ...componente de energía y potencia..."
+                          "textoOriginal": "Artículo 3°.- Texto sin cambios.",
+                          "indicaciones": "",
+                          "textoFinal": "Artículo 3°.- Texto sin cambios."
                         }
                       ]
                     }
@@ -240,7 +270,7 @@
                                 const data = JSON.parse(cleanedJson);
                                 renderTable(data.articulos);
 
-                                const endTime = performance.now(); // Stop timer
+                                const endTime = performance.now();
                                 const duration = ((endTime - startTime) / 1000).toFixed(2);
                                 timerResult.textContent = `(Generado en ${duration} segundos)`;
 
@@ -282,9 +312,7 @@
                 return;
             }
             
-            // Clone the table to avoid modifying the original
             const tableClone = table.cloneNode(true);
-            // Add some basic styling for Word
             tableClone.style.borderCollapse = 'collapse';
             tableClone.style.width = '100%';
             const cells = tableClone.querySelectorAll('th, td');
@@ -304,9 +332,12 @@
                         table { border-collapse: collapse; width: 100%; }
                         th, td { border: 1px solid black; padding: 8px; text-align: left; vertical-align: top; }
                         th { background-color: #f2f2f2; }
+                        ins { background-color: #d4edda; text-decoration: none; }
+                        del { background-color: #f8d7da; text-decoration: line-through; }
                     </style>
                 </head>
                 <body>
+                    <h1>Tabla Comparativa de Indicaciones</h1>
                     ${tableClone.outerHTML}
                 </body>
                 </html>
