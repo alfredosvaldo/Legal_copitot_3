@@ -46,6 +46,37 @@
             background-color: #f8d7da; /* Light red */
             text-decoration: line-through;
         }
+        /* Custom modal for alerts */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+        }
+        .modal-button {
+            margin-top: 1.5rem;
+            padding: 0.5rem 1.5rem;
+            border-radius: 0.375rem;
+            background-color: #2563eb;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 flex flex-col min-h-screen">
@@ -81,24 +112,40 @@
 
         <div id="outputSection" class="bg-white p-6 rounded-lg shadow-md hidden">
              <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold">Resultado Comparativo <span id="timerResult" class="text-sm font-normal text-gray-500 ml-2"></span></h2>
-                <button id="exportButton" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">
-                    Exportar a Word
-                </button>
+                 <h2 class="text-xl font-semibold">Resultado Comparativo <span id="timerResult" class="text-sm font-normal text-gray-500 ml-2"></span></h2>
+                 <button id="exportButton" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">
+                     Exportar a Word
+                 </button>
              </div>
              <div id="resultsContainer" class="w-full overflow-x-auto">
-                <!-- The results table will be rendered here -->
+                 <!-- The results table will be rendered here -->
              </div>
         </div>
     </div>
 
     <footer class="text-center p-4 text-gray-500 text-sm">
-        <p>Copiloto Legal v3.0 | Última actualización: 14 de Agosto, 2025</p>
+        <p>Copiloto Legal v3.5 | Última actualización: 18 de Agosto, 2025</p>
     </footer>
+
+    <!-- Modal for custom alerts -->
+    <div id="customAlert" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <p id="alertMessage"></p>
+            <button id="alertCloseButton" class="modal-button">Cerrar</button>
+        </div>
+    </div>
 
     <script>
         document.getElementById('generateButton').addEventListener('click', generateIndications);
         document.getElementById('exportButton').addEventListener('click', exportToWord);
+        document.getElementById('alertCloseButton').addEventListener('click', () => {
+            document.getElementById('customAlert').classList.add('hidden');
+        });
+
+        function showAlert(message) {
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('customAlert').classList.remove('hidden');
+        }
 
         function cleanTextForJson(text) {
             let cleaned = text.trim();
@@ -157,7 +204,7 @@
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td class="p-2 border align-top whitespace-pre-wrap">${originalHtml}</td>
-                    <td class="p-2 border align-top whitespace-pre-wrap">${article.indicaciones}</td>
+                    <td class="p-2 border align-top whitespace-pre-wrap">${article.indicaciones.replace(/\n/g, '<br>')}</td>
                     <td class="p-2 border align-top whitespace-pre-wrap">${finalHtml}</td>
                 `;
                 tbody.appendChild(row);
@@ -178,12 +225,12 @@
             const timerResult = document.getElementById('timerResult');
             
             if (!apiKey) {
-                alert('Por favor, ingrese su clave de API de Gemini para continuar.');
+                showAlert('Por favor, ingrese su clave de API de Gemini para continuar.');
                 return;
             }
             
             if (!originalText.trim() || !finalText.trim()) {
-                alert('Por favor, pegue el texto en ambas columnas para generar las indicaciones.');
+                showAlert('Por favor, pegue el texto en ambas columnas para generar las indicaciones.');
                 return;
             }
 
@@ -197,50 +244,77 @@
 
             try {
                 const prompt = `
-                    **Rol y Objetivo:** Eres un asesor legislativo experto del Congreso Nacional de Chile. Tu tarea es analizar dos versiones de un articulado ('Texto Original' y 'Texto Final') y devolver un objeto JSON estructurado que contenga las diferencias.
+**Rol y Objetivo:**
+Eres un asesor legal experto, especializado en la redacción de leyes en Chile. Tu tarea es analizar dos versiones de un texto legal ('Texto Original' y 'Texto Final') y generar una **"Propuesta de Indicaciones"** que consolide TODOS los cambios en una lista única y numerada consecutivamente, utilizando la terminología y nomenclatura oficial de la ley chilena.
 
-                    **Instrucciones Fundamentales:**
-                    1.  **Análisis por Artículo:** Procesa el documento completo, usando "Artículo [N°]" como el delimitador para cada bloque de texto.
-                    2.  **Comparación y Estructuración:** Compara CADA artículo del 'Texto Original' con su correspondiente artículo en el 'Texto Final'.
-                    3.  **Generar Indicaciones:** Para los artículos que presenten diferencias, genera un texto de indicaciones formales, precisas y numeradas (1), 2), etc.) usando el glosario legislativo chileno.
-                    4.  **Formato de Salida JSON OBLIGATORIO:** Tu respuesta DEBE ser un único objeto JSON. Este objeto debe contener una clave "articulos" cuyo valor es un array de objetos.
-                    5.  **Estructura del Objeto de Artículo:** Cada objeto en el array "articulos" DEBE tener exactamente tres claves:
-                        - \`textoOriginal\`: El texto completo del artículo original.
-                        - \`indicaciones\`: El texto de las indicaciones generadas para ese artículo (comenzando con "AL ARTÍCULO [N°]"). Si no hay cambios, este valor DEBE ser una cadena de texto vacía ("").
-                        - \`textoFinal\`: El texto completo del artículo final.
-                    6.  **Manejo de Sin Cambios:** DEBES incluir TODOS los artículos en el array "articulos", incluso si no tienen cambios. Para los artículos sin cambios, simplemente deja la clave "indicaciones" como una cadena vacía.
+---
 
-                    **Ejemplo de Salida JSON Esperada:**
-                    \`\`\`json
-                    {
-                      "articulos": [
-                        {
-                          "textoOriginal": "Artículo 2°.- ... (i) ...consumo mensual menor o igual a 250 kWh...",
-                          "indicaciones": "AL ARTÍCULO 2°\\n1) Para reemplazar en el numeral (i)... el guarismo “250” por “350”.",
-                          "textoFinal": "Artículo 2°.- ... (i) ...consumo mensual menor o igual a 350 kWh..."
-                        },
-                        {
-                          "textoOriginal": "Artículo 3°.- Texto sin cambios.",
-                          "indicaciones": "",
-                          "textoFinal": "Artículo 3°.- Texto sin cambios."
-                        }
-                      ]
-                    }
-                    \`\`\`
+**1. TAREA PRINCIPAL: LISTA ÚNICA Y CONSECUTIVA**
 
-                    ---
-                    **Analiza los siguientes textos y genera el objeto JSON:**
+Tu objetivo es producir una sola lista de indicaciones para todo el documento. Cada indicación individual debe estar numerada, y esta numeración DEBE ser continua a lo largo de todos los artículos. NO reinicies el conteo en cada nuevo artículo.
 
-                    **Texto Original:**
-                    \`\`\`
-                    ${originalText}
-                    \`\`\`
+---
 
-                    **Texto Final:**
-                    \`\`\`
-                    ${finalText}
-                    \`\`\`
-                `;
+**2. INSTRUCCIONES DE FORMATO DE SALIDA (JSON OBLIGATORIO)**
+
+Tu respuesta DEBE ser un único objeto JSON válido. Este objeto debe contener una clave "articulos" cuyo valor es un array de objetos. Cada objeto en el array representa un artículo del texto original.
+
+- \`textoOriginal\`: El texto completo del artículo en la versión original.
+- \`indicaciones\`: La "Propuesta de Indicaciones" para ese artículo.
+    - Si hay cambios, el texto comenzará con "AL ARTÍCULO [N°]" seguido de una o más indicaciones numeradas.
+    - Si no hay cambios, este valor DEBE ser una cadena vacía ("").
+- \`textoFinal\`: El texto completo del artículo en la versión final.
+
+---
+
+**3. REGLAS CRÍTICAS PARA GENERAR EL CONTENIDO DE "INDICACIONES"**
+
+**A. REGLA CRÍTICA: NUMERACIÓN CONSECUTIVA Y CONTINUA**
+- La numeración de las indicaciones (1.-, 2.-, 3.-, etc.) es la parte más importante.
+- DEBES mantener un contador único para todo el documento. Si el Artículo 1 tiene dos indicaciones (1.- y 2.-), la primera indicación del siguiente artículo modificado (p. ej., Artículo 5) DEBE ser 3.-.
+
+**EJEMPLO DE NUMERACIÓN CONTINUA (FORMATO OBLIGATORIO):**
+\`\`\`
+// Indicaciones para el Artículo 2
+"indicaciones": "AL ARTÍCULO 2°\\n1.- Para reemplazar, en su inciso primero, el vocablo “treinta” por “sesenta”.\\n2.- Para suprimir, en su inciso segundo, la frase “y sin ulterior recurso”."
+
+// Indicaciones para el Artículo 5 (el siguiente con cambios)
+"indicaciones": "AL ARTÍCULO 5°\\n3.- Para sustituir su inciso final por el siguiente: “[Texto nuevo]”."
+\`\`\`
+
+**B. ANÁLISIS, ESTRUCTURA Y PRINCIPIOS DE AHORRO**
+1.  **Analizar con Precisión:** Compara 'Texto Original' y 'Texto Final' para identificar todas las adiciones, eliminaciones y sustituciones.
+2.  **Unidad de Cambio Mínima:** Antes de concluir que un 'inciso' completo ha sido modificado, verifica si el cambio es menor (palabra, guarismo, expresión).
+3.  **Dar Contexto:** Especifica siempre el inciso, numeral o literal afectado.
+4.  **Principio de Ahorro y Agrupación (OBLIGATORIO):** Para optimizar la redacción, aplica estos principios:
+    - **Ahorro de Instrucciones (Múltiples acciones iguales):** Si realizas varias acciones idénticas (p. ej., múltiples reemplazos) en el mismo inciso, agrúpalas en una sola indicación. **Ejemplo:** \`Para reemplazar, en el inciso primero, el vocablo "X", la frase "Y" y el guarismo "Z".\`
+    - **Ahorro de Ubicación (Múltiples acciones distintas):** Si realizas varias acciones diferentes en el mismo inciso, enuncia la ubicación una sola vez y luego detalla las acciones con literales (a), b), c)). **Ejemplo:** \`Para modificar el inciso primero en el siguiente sentido: a) Reemplázase...; b) Suprímese...; y c) Intercálase...\`
+5.  **Múltiples Cambios (Distintos Incisos):** Si un artículo tiene modificaciones en distintos incisos, cada cambio en un inciso diferente DEBE ser una nueva indicación numerada en la lista consecutiva general.
+
+**C. GLOSARIO DE TERMINOLOGÍA (USO OBLIGATORIO)**
+- **Verbos:** *reemplázase / sustitúyese*, *incorpórase / agrégase*, *suprímese / elimínase*, *intercálase*, *modifícase*.
+- **Sustantivos:** *la expresión*, *la frase*, *la oración*, *la palabra*, *el inciso*, *el guarismo*.
+
+---
+
+**4. ANÁLISIS DE TEXTOS**
+
+Procesa el documento completo usando "Artículo [N°]" o "ARTÍCULO [N°]" como delimitador. Incluye TODOS los artículos en el array JSON, incluso si no tienen cambios.
+
+**Texto Original:**
+\`\`\`
+${originalText}
+\`\`\`
+
+**Texto Final:**
+\`\`\`
+${finalText}
+\`\`\`
+
+---
+
+Ahora, genera la "Propuesta de Indicaciones" como una lista única y numerada consecutivamente con la máxima precisión.
+`;
                 
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
                 
@@ -277,20 +351,20 @@
                             } else {
                                 throw new Error('La respuesta de la API no contiene texto.');
                             }
-                            return;
+                            return; // Exit loop on success
                         }
 
-                        if (response.status === 503) {
+                        if (response.status === 503 || response.status === 429) { // Handle overloaded and rate limit errors
                              if (i === maxRetries - 1) throw new Error(`El modelo está sobrecargado. Falló después de ${maxRetries} intentos.`);
-                            await new Promise(resolve => setTimeout(resolve, delay));
-                            delay *= 2; 
+                             await new Promise(resolve => setTimeout(resolve, delay));
+                             delay *= 2; 
                         } else {
                             const errorBody = await response.text();
                             throw new Error(`La solicitud a la API falló con el estado ${response.status}: ${errorBody}`);
                         }
 
                     } catch (error) {
-                        if (i === maxRetries - 1) throw error;
+                        if (i === maxRetries - 1) throw error; // Throw last error
                         await new Promise(resolve => setTimeout(resolve, delay));
                         delay *= 2;
                     }
@@ -308,11 +382,16 @@
         function exportToWord() {
             const table = document.getElementById('resultsTable');
             if (!table) {
-                alert("No hay resultados para exportar.");
+                showAlert("No hay resultados para exportar.");
                 return;
             }
             
+            // Create a clone to manipulate for export without affecting the displayed table
             const tableClone = table.cloneNode(true);
+            
+            // Convert <br> tags back to newlines for proper formatting in Word
+            tableClone.querySelectorAll('br').forEach(br => br.parentNode.replaceChild(document.createTextNode('\n'), br));
+
             tableClone.style.borderCollapse = 'collapse';
             tableClone.style.width = '100%';
             const cells = tableClone.querySelectorAll('th, td');
@@ -330,7 +409,7 @@
                     <style>
                         body { font-family: 'Times New Roman', Times, serif; }
                         table { border-collapse: collapse; width: 100%; }
-                        th, td { border: 1px solid black; padding: 8px; text-align: left; vertical-align: top; }
+                        th, td { border: 1px solid black; padding: 8px; text-align: left; vertical-align: top; white-space: pre-wrap; }
                         th { background-color: #f2f2f2; }
                         ins { background-color: #d4edda; text-decoration: none; }
                         del { background-color: #f8d7da; text-decoration: line-through; }
